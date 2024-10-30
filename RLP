@@ -1,0 +1,83 @@
+import numpy as np
+import pandas as pd
+
+class RecommenderSystem:
+    """
+    Clase que representa un sistema de recomendación personalizado.
+    Utiliza filtrado colaborativo basado en usuarios.
+    """
+
+    def __init__(self, data):
+        """
+        Inicializa el sistema de recomendación con un conjunto de datos.
+
+        :param data: DataFrame que contiene las calificaciones de los usuarios para libros o películas.
+        """
+        self.data = data
+        self.user_similarity_matrix = None
+
+    def compute_user_similarity(self):
+        """
+        Calcula la matriz de similitud entre usuarios utilizando la correlación de Pearson.
+        """
+        # Transponemos el DataFrame para que las filas sean usuarios y las columnas sean ítems
+        user_item_matrix = self.data.pivot(index='user_id', columns='item_id', values='rating').fillna(0)
+        
+        # Calculamos la similitud entre usuarios
+        self.user_similarity_matrix = user_item_matrix.corr(method='pearson')
+    
+    def get_similar_users(self, user_id, n=5):
+        """
+        Obtiene los usuarios más similares a un usuario dado.
+
+        :param user_id: ID del usuario para el cual se buscan usuarios similares.
+        :param n: Número de usuarios similares a retornar.
+        :return: Lista de IDs de usuarios similares.
+        """
+        if self.user_similarity_matrix is None:
+            raise ValueError("La matriz de similitud no ha sido calculada. Llama a compute_user_similarity() primero.")
+
+        # Obtenemos la fila correspondiente al usuario dado
+        similar_scores = self.user_similarity_matrix[user_id].drop(user_id).sort_values(ascending=False)
+        
+        return similar_scores.head(n).index.tolist()
+
+    def recommend_items(self, user_id, n=5):
+        """
+        Recomienda ítems a un usuario basado en las calificaciones de usuarios similares.
+
+        :param user_id: ID del usuario para el cual se hacen recomendaciones.
+        :param n: Número de recomendaciones a retornar.
+        :return: Lista de ítems recomendados.
+        """
+        similar_users = self.get_similar_users(user_id)
+        
+        # Filtramos las calificaciones de los usuarios similares
+        similar_users_ratings = self.data[self.data['user_id'].isin(similar_users)]
+        
+        # Calculamos la media ponderada de las calificaciones
+        recommendations = similar_users_ratings.groupby('item_id')['rating'].mean().sort_values(ascending=False)
+        
+        return recommendations.head(n).index.tolist()
+
+
+# Ejemplo de uso
+if __name__ == "__main__":
+    # Creamos un DataFrame con datos ficticios
+    data = pd.DataFrame({
+        'user_id': [1, 1, 1, 2, 2, 3, 3, 4],
+        'item_id': [101, 102, 103, 101, 104, 102, 105, 103],
+        'rating': [5, 4, 3, 4, 5, 2, 4, 3]
+    })
+
+    # Inicializamos el sistema de recomendación
+    recommender = RecommenderSystem(data)
+
+    # Calculamos la matriz de similitud entre usuarios
+    recommender.compute_user_similarity()
+
+    # Obtenemos recomendaciones para un usuario específico
+    user_id_to_recommend = 1
+    recommendations = recommender.recommend_items(user_id_to_recommend)
+
+    print(f"Recomendaciones para el usuario {user_id_to_recommend}: {recommendations}")
